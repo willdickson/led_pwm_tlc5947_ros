@@ -19,8 +19,9 @@ class LedPwmTLC5947(object):
 
         self.port = rospy.get_param('port', '/dev/ttyACM0')
         rospy.init_node('led_pwm_tlc5947')
-
-        self.controller = PwmController(self.port)
+        self.lock = threading.Lock()
+        with self.lock:
+            self.controller = PwmController(self.port)
         self.number_of_devices = self.controller.get_number_of_devices()
         self.set_srv = rospy.Service('led_pwm_set', LedPwmSet, self.on_led_pwm_set)
         self.off_srv = rospy.Service('led_pwm_off', LedPwmOff, self.on_led_pwm_off)
@@ -29,11 +30,12 @@ class LedPwmTLC5947(object):
     def on_led_pwm_set(self,req): 
         ok = True
         msg = ''
-        try:
-            self.controller.set_one(req.dev_number, req.led_number, req.led_value)
-        except PwmControllerException, exception:
-            ok = False
-            msg = str(exception)
+        with self.lock:
+            try:
+                self.controller.set_one(req.dev_number, req.led_number, req.led_value)
+            except PwmControllerException, exception:
+                ok = False
+                msg = str(exception)
 
         info_msg = LedPwmInfo()
         info_msg.header = std_msgs.msg.Header()
@@ -51,12 +53,13 @@ class LedPwmTLC5947(object):
         ok = True
         msg = ''
         for i in range(self.number_of_devices):
-            try:
-                self.controller.set_all(i,0)
-            except PwmControllerException, exception:
-                ok = False
-                msg = str(exception)
-                break
+            with self.lock:
+                try:
+                    self.controller.set_all(i,0)
+                except PwmControllerException, exception:
+                    ok = False
+                    msg = str(exception)
+                    break
 
         info_msg = LedPwmInfo()
         info_msg.header = std_msgs.msg.Header()
